@@ -1,6 +1,7 @@
 {
   "name": "kubeflow-pipeline-builder",
   "version": "0.1.0",
+  "description": "Visual DAG editor with Python code completion for Kubeflow Pipelines",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
