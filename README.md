@@ -304,8 +304,8 @@ docker-compose restart language-server
 - **React**: 19.2.0
 - **Python**: 3.11-slim
 - **Flask**: 3.0.0
+- **Flask-CORS**: 4.0.0
 - **Jedi**: 0.18.1 (KFP 補完互換性のため <0.19.0)
-- **python-lsp-server**: 1.7.4
 - **KFP**: 2.0.0
 - **numpy**: 1.24.3
 - **pandas**: 2.0.3
