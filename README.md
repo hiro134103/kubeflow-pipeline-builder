@@ -20,14 +20,30 @@ Visual DAG エディタと Python コード補完機能を備えた Kubeflow Pip
 ## クイックスタート
 
 ### 前提条件
-- Docker & Docker Compose
-- 3000, 8000 ポートが空いていること
+
+**Docker & Docker Compose** が必須です。以下のバージョン以上推奨：
+
+| 環境 | インストール方法 | バージョン |
+|---|---|---|
+| **Windows / macOS** | [Docker Desktop](https://www.docker.com/products/docker-desktop) | 20.10+ |
+| **Linux** | [Docker Engine](https://docs.docker.com/engine/install/) | 20.10+ |
+
+ポート確認（既に使用されていないことを確認）：
+- `3000` - フロントエンド
+- `8000` - LSP サーバー
 
 ### 起動
 
 ```bash
+# リポジトリをクローン
+git clone https://github.com/hiro134103/kubeflow-pipeline-builder.git
+cd kubeflow-pipeline-builder
+
+# Docker コンテナをビルド & 起動
 docker-compose up --build
 ```
+
+**すべてのプラットフォームで同一のコマンドで動作します。** ✅
 
 ### アクセス
 
