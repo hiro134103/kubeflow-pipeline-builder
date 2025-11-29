@@ -276,18 +276,6 @@ docker-compose logs language-server
 docker-compose restart language-server
 ```
 
-### 補完が出ない
-
-1. **ブラウザコンソール確認** (F12  Console)
-2. **LSP サーバーログ** (`docker-compose logs language-server`)
-3. **コード形式** - Python 構文が正しいか確認
-4. **遅延** - LSP 初期化に 5-10 秒かかることあり
-
-### ノードの編集が保存されない
-
-- **自動保存は未実装** - 「Save」ボタンをクリック必須
-- 状態確認: サイドバーの「Node Arguments」に反映されているか
-
 ## パフォーマンス
 
 | メトリクス | 値 |
