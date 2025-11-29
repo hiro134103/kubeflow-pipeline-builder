@@ -2,7 +2,6 @@
 Simple LSP wrapper using Jedi for Python completion
 Provides VSCode-like completion and analysis
 """
-import json
 import logging
 import re
 from flask import Flask, request, jsonify
@@ -89,19 +88,17 @@ def get_completions():
             logger.info(f"Jedi completions: {len(completions)} (function signatures included)")
             
             # If no completions found and this looks like KFP, try KFP fallback
-            if len(completions) == 0 and 'kfp' in code:
+            if not completions and 'kfp' in code:
                 kfp_comps = _get_kfp_fallback_completions(code, line, character)
                 if kfp_comps:
-                    logger.info(f"KFP fallback completions: {len(kfp_comps)}")
                     return jsonify({'completions': kfp_comps})
             
             return jsonify({'completions': completions})
         except Exception as e:
-            logger.warning(f"Jedi error: {e}")
+            logger.debug(f"Jedi error: {e}")
             # Try KFP fallback on error
             kfp_comps = _get_kfp_fallback_completions(code, line, character)
             if kfp_comps:
-                logger.info(f"KFP fallback completions after error: {len(kfp_comps)}")
                 return jsonify({'completions': kfp_comps})
             return jsonify({'completions': []})
 
@@ -163,7 +160,6 @@ def _get_kfp_fallback_completions(code, line, character):
         return []
     
     line_text = lines[line][:character]
-    logger.info(f"KFP fallback: analyzing line_text='{line_text}'")
     
     # Check for 'import kfp' or 'from kfp import'
     if 'import kfp' in code:
@@ -172,15 +168,14 @@ def _get_kfp_fallback_completions(code, line, character):
         if match:
             module_path = match.group(1)
             prefix = match.group(2)
-            logger.info(f"KFP fallback: module_path='{module_path}', prefix='{prefix}'")
             
             if module_path in KFP_COMPLETIONS:
                 completions = []
                 for item in KFP_COMPLETIONS[module_path]:
-                    if item.startswith(prefix) or prefix == '':
+                    if not prefix or item.startswith(prefix):
                         completions.append({
                             'label': item,
-                            'kind': 9 if item[0].isupper() else 12,  # Class or Function
+                            'kind': 5 if item[0].isupper() else 12,  # Class or Function
                             'detail': 'kfp',
                             'documentation': f"{module_path}.{item}",
                             'insertText': item
