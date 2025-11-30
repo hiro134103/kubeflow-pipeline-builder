@@ -119,18 +119,18 @@ kubeflow-pipeline-builder/
 
 **フロー**:
 1. **React App** - コンポーネント分割アーキテクチャ
-   - usePipelineFlow hook - パイプライン状態管理
-   - useNodeArguments hook - ノード引数管理
-   - 8 個の小コンポーネント - 関心分離
+   - `usePipelineFlow` hook - パイプライン状態管理
+   - `useNodeArguments` hook - ノード引数管理
+   - 8 個の小コンポーネント - 各コンポーネントが単一の役割を担当
 
-2. **Monaco Editor** - コード編集
-   - syntax highlighting
-   - lspClient.js 経由で補完リクエスト
+2. **Monaco Editor** - Python コード編集
+   - シンタックスハイライト
+   - `lspClient.js` を経由して LSP サーバーに補完リクエスト
 
-3. **Nginx** - 本番サーブ
-   - 静的資産キャッシング (1年)
-   - /api/* をバックエンドにプロキシ
-   - SPA ルーティング対応 (try_files $uri /index.html)
+3. **Nginx** - 本番環境でのサーバー
+   - CSS / JavaScript などのファイルをブラウザに長期保存させる（アクセス高速化）
+   - `/api/*` をバックエンドにプロキシ
+   - SPA ルーティング対応（存在しないパスへのリクエストは `index.html` を返す）
 
 ### バックエンド
 
