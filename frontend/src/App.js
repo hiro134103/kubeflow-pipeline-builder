@@ -11,7 +11,6 @@ import { useNodeArguments } from './hooks/useNodeArguments';
 import { usePipelineFlow } from './hooks/usePipelineFlow';
 import NodeHeader from './components/NodeHeader';
 import ArgumentsSection from './components/ArgumentsSection';
-import OutputTypeSelector from './components/OutputTypeSelector';
 import BaseImageSelector from './components/BaseImageSelector';
 import OutputParamsEditor from './components/OutputParamsEditor';
 import CodeEditorDialog from './components/CodeEditorDialog';
@@ -75,12 +74,6 @@ const CustomNode = React.memo(({ data, id }) => {
           onAddOutput={addOutput}
           onUpdateOutput={updateOutput}
           onRemoveOutput={removeOutput}
-        />
-
-        {/* Output */}
-        <OutputTypeSelector
-          returnType={data.returnType}
-          onOutputTypeChange={(type) => data.onOutputTypeChange?.(id, type)}
         />
       </Box>
 
