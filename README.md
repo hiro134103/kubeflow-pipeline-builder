@@ -134,7 +134,7 @@ kubeflow-pipeline-builder/
 
 ### バックエンド
 
-**Tech Stack**: Python 3.11-slim, Flask 3.0.0, Jedi 0.18.1, KFP 2.0.0
+**Tech Stack**: Python 3.11-slim, Flask 3.0.0, Jedi 0.18.1, KFP 2.0.0, scikit-learn 1.3.2
 
 **lsp_wrapper.py** - Flask HTTP LSP サーバー
 
@@ -144,7 +144,7 @@ kubeflow-pipeline-builder/
    script = Script(code, path='untitled.py')
    completions = script.complete(line=line+1, column=character)
    ```
-   対応: numpy, pandas, pathlib, os, sys, etc.
+   対応: numpy, pandas, pathlib, scikit-learn, os, sys, etc.
 
 2. **段階 2: KFP フォールバック** (Jedi が結果 0 の場合)
    ```python
@@ -383,6 +383,7 @@ docker-compose restart language-server
 - **Flask-CORS**: 4.0.0
 - **Jedi**: 0.18.1 (KFP 補完互換性のため <0.19.0)
 - **KFP**: 2.0.0
+- **scikit-learn**: 1.3.2
 - **numpy**: 1.24.3
 - **pandas**: 2.0.3
 

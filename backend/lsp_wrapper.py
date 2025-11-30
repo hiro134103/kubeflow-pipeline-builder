@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# KFP 2.0 API completions for fallback
+# Static completions for KFP (Jedi cannot analyze dynamic imports)
 KFP_COMPLETIONS = {
     'kfp': ['dsl', 'components', 'client', 'compiler', 'v2'],
     'kfp.dsl': ['pipeline', 'component', 'Pipeline', 'ContainerOp', 'PipelineParam', 'Condition'],
@@ -161,26 +161,24 @@ def _get_kfp_fallback_completions(code, line, character):
     
     line_text = lines[line][:character]
     
-    # Check for 'import kfp' or 'from kfp import'
-    if 'import kfp' in code:
-        # Match patterns like "kfp." or "kfp.dsl."
-        match = re.search(r'(kfp(?:\.[a-zA-Z_]\w*)*)\s*\.\s*(\w*)$', line_text)
-        if match:
-            module_path = match.group(1)
-            prefix = match.group(2)
-            
-            if module_path in KFP_COMPLETIONS:
-                completions = []
-                for item in KFP_COMPLETIONS[module_path]:
-                    if not prefix or item.startswith(prefix):
-                        completions.append({
-                            'label': item,
-                            'kind': 5 if item[0].isupper() else 12,  # Class or Function
-                            'detail': 'kfp',
-                            'documentation': f"{module_path}.{item}",
-                            'insertText': item
-                        })
-                return completions
+    # Match patterns like "kfp." or "kfp.dsl."
+    match = re.search(r'(kfp(?:\.[a-zA-Z_]\w*)*)\s*\.\s*(\w*)$', line_text)
+    if match:
+        module_path = match.group(1)
+        prefix = match.group(2)
+        
+        if module_path in KFP_COMPLETIONS:
+            completions = []
+            for item in KFP_COMPLETIONS[module_path]:
+                if not prefix or item.startswith(prefix):
+                    completions.append({
+                        'label': item,
+                        'kind': 5 if item[0].isupper() else 12,  # Class or Function
+                        'detail': 'kfp',
+                        'documentation': f"{module_path}.{item}",
+                        'insertText': item
+                    })
+            return completions
     
     return []
 
