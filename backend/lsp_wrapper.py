@@ -11,14 +11,12 @@ from jedi import Script
 app = Flask(__name__)
 CORS(app)
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Static completions for KFP (Jedi cannot analyze dynamic imports)
 KFP_COMPLETIONS = {
     'kfp': ['dsl', 'components', 'client', 'compiler', 'v2'],
     'kfp.dsl': ['pipeline', 'component', 'Pipeline', 'ContainerOp', 'PipelineParam', 'Condition'],
@@ -50,27 +48,24 @@ def get_completions():
             logger.warning("Invalid parameters for completion")
             return jsonify({'completions': []})
 
-        # Use Jedi for completion (includes function signatures with arguments)
         try:
             script = Script(code, path='untitled.py')
             jedi_completions = script.complete(line=line + 1, column=character)
             
             completions = []
-            for completion in jedi_completions[:50]:  # Limit to 50 results
+            for completion in jedi_completions[:50]:
                 insert_text = completion.name
                 documentation = ''
                 detail = completion.type
                 
                 try:
-                    # For functions, extract signature with arguments
                     if completion.type == 'function':
                         sigs = completion.get_signatures()
                         if sigs:
                             sig = sigs[0]
                             insert_text = f"{completion.name}("
-                            documentation = str(sig)  # e.g., "mean(a, axis=None)"
+                            documentation = str(sig)
                     
-                    # Add docstring for documentation
                     docstring = completion.docstring()
                     if docstring:
                         documentation = f"{documentation}\n{docstring}" if documentation else docstring
@@ -85,9 +80,8 @@ def get_completions():
                     'insertText': insert_text
                 })
             
-            logger.info(f"Jedi completions: {len(completions)} (function signatures included)")
+            logger.info(f"Jedi completions: {len(completions)}")
             
-            # If no completions found and this looks like KFP, try KFP fallback
             if not completions and 'kfp' in code:
                 kfp_comps = _get_kfp_fallback_completions(code, line, character)
                 if kfp_comps:
@@ -96,7 +90,6 @@ def get_completions():
             return jsonify({'completions': completions})
         except Exception as e:
             logger.debug(f"Jedi error: {e}")
-            # Try KFP fallback on error
             kfp_comps = _get_kfp_fallback_completions(code, line, character)
             if kfp_comps:
                 return jsonify({'completions': kfp_comps})
@@ -149,9 +142,9 @@ def _get_completion_kind(jedi_type):
         'variable': 13,   # Variable
         'instance': 13,   # Variable
         'statement': 13,  # Variable
-        'keyword': 14,    # Keyword
+        'keyword': 14,
     }
-    return kind_map.get(jedi_type, 13)  # Default to Variable
+    return kind_map.get(jedi_type, 13)
 
 def _get_kfp_fallback_completions(code, line, character):
     """Get KFP completions from static database"""
@@ -161,7 +154,6 @@ def _get_kfp_fallback_completions(code, line, character):
     
     line_text = lines[line][:character]
     
-    # Match patterns like "kfp." or "kfp.dsl."
     match = re.search(r'(kfp(?:\.[a-zA-Z_]\w*)*)\s*\.\s*(\w*)$', line_text)
     if match:
         module_path = match.group(1)
@@ -173,12 +165,14 @@ def _get_kfp_fallback_completions(code, line, character):
                 if not prefix or item.startswith(prefix):
                     completions.append({
                         'label': item,
-                        'kind': 5 if item[0].isupper() else 12,  # Class or Function
+                        'kind': 5 if item[0].isupper() else 12,
                         'detail': 'kfp',
                         'documentation': f"{module_path}.{item}",
                         'insertText': item
                     })
             return completions
+    
+    return []
     
     return []
 

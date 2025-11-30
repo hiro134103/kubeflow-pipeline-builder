@@ -7,7 +7,6 @@ import {
 } from '@mui/material';
 import { CssBaseline } from "@mui/material";
 
-// カスタムフックとコンポーネント
 import { useNodeArguments } from './hooks/useNodeArguments';
 import { usePipelineFlow } from './hooks/usePipelineFlow';
 import NodeHeader from './components/NodeHeader';
@@ -20,10 +19,6 @@ import FlowArea from './components/FlowArea';
 import { generatePipelineCode, validateForCodeGeneration } from './utils/codeGenerator';
 import { validateAllNodes } from './utils/nodeNormalizer';
 
-// ---------------------------------------------------
-// ✅ パフォーマンス最適化: CustomNode
-// 分割されたサブコンポーネントを活用
-// ---------------------------------------------------
 const CustomNode = React.memo(({ data, id }) => {
   const available = data.availableSources || [];
   const pipelineParamsList = (data.pipelineParams || []).filter(p => p.key);
@@ -44,7 +39,6 @@ const CustomNode = React.memo(({ data, id }) => {
     }}>
       <Handle type="target" position={Position.Left} id="input" />
 
-      {/* Header */}
       <NodeHeader
         label={data.label}
         componentType={data.componentType}
@@ -77,7 +71,6 @@ const CustomNode = React.memo(({ data, id }) => {
     </Box>
   );
 }, (prevProps, nextProps) => {
-  // ✅ カスタム比較関数: 必要な props のみを比較
   return (
     prevProps.id === nextProps.id &&
     prevProps.data.label === nextProps.data.label &&
@@ -95,17 +88,12 @@ const defaultComponentDefinitions = [
   {
     type: 'blank',
     label: 'Blank Component',
-    // ✅ 新形式: args を使用（params は非推奨）
     args: [],
     codeString: `print("hello world")`
   },
 ];
 
-// ---------------------------------------------------
-// ✅ App Component (改善版)
-// ---------------------------------------------------
 function App() {
-  // ------------------------ 1. State ------------------------
   const reactFlowWrapper = useRef(null);
   const [pipelineName, setPipelineName] = useState('MyPipeline');
   const [pipelineParams, setPipelineParams] = useState([
@@ -114,16 +102,10 @@ function App() {
   const [showCode, setShowCode] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
 
-  // Code Editor State
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState(null);
   const [editingCode, setEditingCode] = useState('');
 
-  // Sidebar State
-  // const [components, setComponents] = useState(defaultComponentDefinitions);
-
-  // ------------------------ 2. Hooks ------------------------
-  // ✅ 改善: usePipelineFlowからコールバックを分離
   const {
     nodes,
     edges,
@@ -140,10 +122,9 @@ function App() {
     onArgChange,
     onOutputTypeChange,
     updateNodeData,
-    injectCallbacksToNode, // ✅ 名前変更
+    injectCallbacksToNode,
   } = usePipelineFlow(pipelineParams);
 
-  // ダイアログが開くときに、最新のノード情報から常にコードを取得
   React.useEffect(() => {
     if (codeEditorOpen && editingNodeId) {
       const node = nodes.find(n => n.id === editingNodeId);
@@ -151,12 +132,7 @@ function App() {
       setEditingCode(code);
     }
   }, [codeEditorOpen, editingNodeId, nodes]);
-
-  // ------------------------ 3. ノード操作ハンドラ (App.js内で定義) ------------------------
   
-  /**
-   * ✅ コードエディタを開く
-   */
   const openCodeEditor = useCallback((nodeId) => {
     const node = nodes.find(n => n.id === nodeId);
     const code = node?.data?.codeString || '';
@@ -165,9 +141,6 @@ function App() {
     setCodeEditorOpen(true);
   }, [nodes]);
 
-  /**
-   * ✅ ノードの名前変更
-   */
   const handleRename = useCallback((nodeId) => {
     const node = nodes.find(n => n.id === nodeId);
     const newName = prompt('Enter new node label:', node?.data.label || '');
@@ -176,22 +149,13 @@ function App() {
     }
   }, [nodes, renameNode]);
 
-  /**
-   * ✅ ノード削除
-   */
   const handleDelete = useCallback((nodeId) => {
-    // eslint-disable-next-line no-restricted-globals
     if (confirm('Delete this node?')) {
       deleteNode(nodeId);
     }
   }, [deleteNode]);
 
-  /**
-   * ✅ 改善: ノード追加
-   * - コールバックを含めたcomponentDefを渡す
-   */
   const handleAddNode = useCallback((componentDef, position) => {
-    // 位置情報とコールバックをcomponentDefに追加
     const defWithPosition = { 
       ...componentDef, 
       position,
@@ -204,14 +168,9 @@ function App() {
       }
     };
     
-    // ノード作成（コールバック付き）
     addNode(defWithPosition);
   }, [addNode, onArgChange, onOutputTypeChange, openCodeEditor, handleRename, handleDelete]);
 
-  // ✅ コールバック関数は各ノード追加時に注入されるため、useEffectは不要
-
-  // ------------------------ 4. Pipeline Params Handlers ------------------------
-  
   const handleAddPipelineParam = useCallback(() => {
     setPipelineParams((prev) => [
       ...prev,
@@ -234,8 +193,6 @@ function App() {
     setPipelineParams((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  // ------------------------ 5. Drag & Drop Handlers ------------------------
-  
   const handleOnDrop = useCallback(
     (event) => {
       event.preventDefault();
@@ -267,20 +224,16 @@ function App() {
     updateNodeData(editingNodeId, { codeString: codeToSave });
   }, [editingNodeId, editingCode, updateNodeData]);
 
-  // ------------------------ 6. Code Generation & Download ------------------------
-
   const handleGenerateCode = useCallback(() => {
     if (!nodes.length) {
       alert('Please add at least one node');
       return;
     }
 
-    // ✅ データ構造のバリデーション（開発環境）
     if (process.env.NODE_ENV === 'development') {
       validateAllNodes(nodes);
     }
 
-    // ✅ コード生成前のバリデーション
     const validation = validateForCodeGeneration(nodes, pipelineParams);
     if (!validation.valid) {
       const errorMessage = 'Code generation failed:\n\n' + 
@@ -318,7 +271,6 @@ function App() {
     URL.revokeObjectURL(url);
   }, [generatedCode, pipelineName]);
 
-  // ------------------------ 7. Render ------------------------
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', m: 0, p: 0 }}>
       <CssBaseline />
