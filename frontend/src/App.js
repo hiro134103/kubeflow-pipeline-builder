@@ -12,6 +12,7 @@ import { usePipelineFlow } from './hooks/usePipelineFlow';
 import NodeHeader from './components/NodeHeader';
 import ArgumentsSection from './components/ArgumentsSection';
 import OutputTypeSelector from './components/OutputTypeSelector';
+import BaseImageSelector from './components/BaseImageSelector';
 import CodeEditorDialog from './components/CodeEditorDialog';
 import GeneratedCodeDialog from './components/GeneratedCodeDialog';
 import SidebarPanel from './components/SidebarPanel';
@@ -49,6 +50,12 @@ const CustomNode = React.memo(({ data, id }) => {
 
       {/* Body */}
       <Box sx={{ px: 1, py: 1, backgroundColor: 'white' }}>
+        {/* Base Image */}
+        <BaseImageSelector
+          baseImage={data.baseImage || 'python:3.11-slim'}
+          onUpdate={(image) => data.onBaseImageChange?.(id, image)}
+        />
+
         {/* Arguments */}
         <ArgumentsSection
           args={args}
@@ -76,6 +83,7 @@ const CustomNode = React.memo(({ data, id }) => {
     prevProps.data.label === nextProps.data.label &&
     prevProps.data.componentType === nextProps.data.componentType &&
     prevProps.data.returnType === nextProps.data.returnType &&
+    prevProps.data.baseImage === nextProps.data.baseImage &&
     prevProps.data.args === nextProps.data.args &&
     prevProps.data.availableSources?.length === nextProps.data.availableSources?.length &&
     prevProps.data.pipelineParams?.length === nextProps.data.pipelineParams?.length
@@ -121,6 +129,7 @@ function App() {
     renameNode,
     onArgChange,
     onOutputTypeChange,
+    onBaseImageChange,
     updateNodeData,
     injectCallbacksToNode,
   } = usePipelineFlow(pipelineParams);
@@ -143,14 +152,14 @@ function App() {
 
   const handleRename = useCallback((nodeId) => {
     const node = nodes.find(n => n.id === nodeId);
-    const newName = prompt('Enter new node label:', node?.data.label || '');
+    const newName = window.prompt('Enter new node label:', node?.data.label || '');
     if (newName) {
       renameNode(nodeId, newName);
     }
   }, [nodes, renameNode]);
 
   const handleDelete = useCallback((nodeId) => {
-    if (confirm('Delete this node?')) {
+    if (window.confirm('Delete this node?')) {
       deleteNode(nodeId);
     }
   }, [deleteNode]);
@@ -162,6 +171,7 @@ function App() {
       callbacks: {
         onArgChange,
         onOutputTypeChange,
+        onBaseImageChange,
         onOpenCode: openCodeEditor,
         onRename: handleRename,
         onDelete: handleDelete,
@@ -169,7 +179,7 @@ function App() {
     };
     
     addNode(defWithPosition);
-  }, [addNode, onArgChange, onOutputTypeChange, openCodeEditor, handleRename, handleDelete]);
+  }, [addNode, onArgChange, onOutputTypeChange, onBaseImageChange, openCodeEditor, handleRename, handleDelete]);
 
   const handleAddPipelineParam = useCallback(() => {
     setPipelineParams((prev) => [
@@ -259,6 +269,49 @@ function App() {
       alert(`Failed to generate code: ${error.message}`);
     }
   }, [nodes, edges, pipelineParams, pipelineName]);
+
+  const handleCompileCode = useCallback(async () => {
+    if (!generatedCode) {
+      alert('Please generate code first');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: generatedCode,
+          pipeline_name: pipelineName,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        alert(`Compilation failed: ${result.error}`);
+        console.error('Compilation error:', result.error);
+        return;
+      }
+
+      alert('Pipeline compiled successfully!');
+      console.log('Compiled YAML:', result.yaml);
+
+      // Create a download link for the YAML
+      const element = document.createElement('a');
+      element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(result.yaml));
+      element.setAttribute('download', `${pipelineName}.yaml`);
+      element.style.display = 'none';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    } catch (error) {
+      console.error('Compilation error:', error);
+      alert(`Failed to compile: ${error.message}`);
+    }
+  }, [generatedCode, pipelineName]);
 
   const downloadPipelineCode = useCallback(() => {
     if (!generatedCode) return;
@@ -350,6 +403,7 @@ function App() {
         pipelineName={pipelineName}
         onClose={() => setShowCode(false)}
         onDownload={downloadPipelineCode}
+        onCompile={handleCompileCode}
       />
     </Box>
   );

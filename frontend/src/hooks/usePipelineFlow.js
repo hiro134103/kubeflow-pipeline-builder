@@ -181,6 +181,19 @@ export function usePipelineFlow(pipelineParams) {
   }, [setNodes]);
 
   /**
+   * ベースイメージの変更
+   */
+  const onBaseImageChange = useCallback((nodeId, baseImage) => {
+    setNodes((nds) => 
+      nds.map((node) => 
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, baseImage } }
+          : node
+      )
+    );
+  }, [setNodes]);
+
+  /**
    * ノードの削除
    */
   const deleteNode = useCallback((nodeId) => {
@@ -374,6 +387,7 @@ export function usePipelineFlow(pipelineParams) {
     // データ変更
     onArgChange,
     onOutputTypeChange,
+    onBaseImageChange,
     
     // 直接的な状態更新
     setNodes,

@@ -10,7 +10,7 @@ const sanitizeName = (s) => {
 };
 
 const pythonTypeFor = (t) => {
-  if (!t) return 'Any';
+  if (!t) return 'str';  // デフォルトは 'Any' ではなく 'str' に変更
   if (t === 'str' || t === 'string') return 'str';
   if (t === 'int') return 'int';
   if (t === 'float') return 'float';
@@ -94,31 +94,39 @@ export function generatePipelineCode(nodes, edges, pipelineParams, pipelineName,
   const componentFunctions = nodes.map((node) => {
     const funcName = nodeFunctionMap[node.id];
     const argsArray = node.data.args || [];
+    const baseImage = node.data.baseImage || 'python:3.11-slim';
 
-    // 引数名はサニタイズされた名前を使用
+    // 入力引数の生成
     const paramNames = argsArray.map((a) => sanitizeName(a.name || `arg_${a.id}`));
-
-    // 関数定義の引数リスト (例: arg1: str, arg2: int)
     const paramList = paramNames.map((nm, i) => {
-      const declaredType = pythonTypeFor(argsArray[i]?.type || 'Any');
+      const declaredType = pythonTypeFor(argsArray[i]?.type || 'str');
       return `${nm}: ${declaredType}`;
     }).join(', ');
 
+    // 出力パラメータの生成 (出力ファイルの場合は Output[Dataset])
+    const outputs = node.data.outputs || [];
+    const outputList = outputs.map((out) => {
+      const outName = sanitizeName(out.name || `output_${out.id}`);
+      return `${outName}: Output[Dataset]`;
+    }).join(', ');
+
+    // 完全な引数リスト (入力 + 出力)
+    const fullParamList = [paramList, outputList].filter(Boolean).join(', ');
+
     // ノードのコードソース
     const rawSource = node.data.codeString?.trim() || '';
-    const returnType = pythonTypeFor(node.data.returnType || 'Any');
 
     // Pythonの関数定義の構造を作成
     if (/\bdef\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:/.test(rawSource)) {
       // 既存の関数定義がある場合、シグネチャを置き換え
       return rawSource.replace(
         /(^|\n)\s*def\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:/,
-        `$1@component()\ndef ${funcName}(${paramList}) -> ${returnType}:`
+        `$1@component(base_image='${baseImage}')\ndef ${funcName}(${fullParamList}):`
       );
     } else {
       // 生のコードをインデントして関数内に挿入
       const indented = rawSource.split('\n').map(line => '    ' + line).join('\n');
-      return `@component()\ndef ${funcName}(${paramList}) -> ${returnType}:\n${indented || '    pass'}`;
+      return `@component(base_image='${baseImage}')\ndef ${funcName}(${fullParamList}):\n${indented || '    pass'}`;
     }
   }).join('\n\n');
 
@@ -190,18 +198,32 @@ from kfp.dsl import pipeline, component
 
 ${componentFunctions}
 
+
 @pipeline(name='${pipelineName}')
 def ${sanitizedPipelineName}(${pipelineSig}):
 ${pipelineSteps || '    pass'}
 ${dependencyLines ? '\n' + dependencyLines : ''}
 
-if __name__ == "__main__":
-    from kfp.compiler import Compiler
+# Compile the pipeline to YAML
+import sys
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+try:
+    logger.info("Attempting to compile pipeline...")
+    from kfp.compiler import Compiler
+    logger.info(f"Compiler imported successfully, starting compilation...")
     Compiler().compile(
         pipeline_func=${sanitizedPipelineName}, 
         package_path="${sanitizedPipelineName}.yaml"
     )
+    logger.info(f"Pipeline compiled successfully to ${sanitizedPipelineName}.yaml")
+except Exception as e:
+    logger.error(f"Compilation failed: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+    raise
 `;
 
   return code;

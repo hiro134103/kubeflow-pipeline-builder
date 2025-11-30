@@ -30,6 +30,25 @@ services:
     networks:
       - app-network
 
+  # KFP Compiler API
+  kfp-compiler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.compiler
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
