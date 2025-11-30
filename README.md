@@ -47,51 +47,119 @@ docker-compose up --build
 
 ### アクセス
 
-- **フロントエンド**: http://localhost:3000
+- **フロントエンド**: http://localhost:3000 (本番) / http://localhost:3001 (開発)
 - **LSP サーバー** (ヘルスチェック): http://localhost:8000/health
 - **API 補完エンドポイント**: http://localhost:8000/api/completion (POST)
+
+### 開発環境 vs 本番環境
+
+このプロジェクトは Docker Compose で**開発環境と本番環境を自動で切り替え**ます。
+
+#### 開発環境（ホットリロード対応）
+
+```bash
+# 同じコマンドで開発環境起動（docker-compose.override.yml が自動適用）
+docker-compose up
+```
+
+**特徴**:
+- ✅ **ホットリロード**: `frontend/src/` ファイル保存で自動ブラウザ更新
+- ✅ **npm start**: React Dev Server で起動
+- ✅ **ソースマップ**: デバッガで元のソースコード表示
+- ✅ **ポート 3001**: 本番との競合を回避
+- 🔧 **Volume マウント**: ソースコード変更リアルタイム反映
+
+**仕組み**:
+`docker-compose.override.yml` が自動的に読み込まれ、フロントエンドが以下のように上書きされます：
+- `Dockerfile.dev` を使用（React Dev Server）
+- ポート 3001 にマッピング
+- `src/` と `public/` をボリュームマウント
+- 環境変数: `WATCHPACK_POLLING=true`, `CHOKIDAR_USEPOLLING=true` 設定
+
+#### 本番環境（最適化・高速）
+
+```bash
+# 本番設定のみで起動
+docker-compose -f docker-compose.yml up
+```
+
+**特徴**:
+- ✅ **Static Build**: `npm run build` で最適化・圧縮
+- ✅ **Nginx 配信**: 高速・軽量なサーバー
+- ✅ **ポート 3000**: 標準ポート使用
+- ✅ **完全なコンテナ化**: ソースコード非依存
+
+**違い**:
+- `Dockerfile` を使用（2段階ビルド: Node → Nginx）
+- ボリュームマウントなし（イメージに全て含まれる）
 
 ## プロジェクト構成
 
 ```
 kubeflow-pipeline-builder/
- docker-compose.yml          # マルチコンテナ定義
+ docker-compose.yml              # 本番用マルチコンテナ定義
+ docker-compose.override.yml     # 開発環境用設定（自動適用）
  .dockerignore
  .gitignore
- README.md                   # このファイル
+ README.md                       # このファイル
 
- frontend/                   # React アプリケーション
-    Dockerfile              # 2段階ビルド（NodeNginx）
-    nginx.conf              # Nginx ルーティング設定
+ frontend/                       # React アプリケーション
+    Dockerfile                  # 本番用 (2段階ビルド: Node → Nginx)
+    Dockerfile.dev              # 開発用 (React Dev Server)
+    nginx.conf                  # Nginx ルーティング設定
     package.json
     public/
     src/
-       App.js              # メインコンポーネント (405 行)
+       App.js                  # メインコンポーネント
        App.css
        index.js
        index.css
-       components/         # UI コンポーネント（8 個、モジュール分割）
-          ArgRow.jsx                 # パラメータ行
-          ArgumentsSection.jsx       # パラメータセクション
-          CodeEditorDialog.jsx       # Monaco + LSP 統合エディタ
-          FlowArea.jsx               # ReactFlow エリア
-          GeneratedCodeDialog.jsx    # 生成コード表示
-          NodeHeader.jsx             # ノード情報ヘッダ
-          OutputTypeSelector.jsx     # 出力型選択
-          PipelineParamsEditor.jsx   # パイプラインパラメータ
-          SidebarPanel.jsx           # サイドバー
-       hooks/              # React Hooks
-          useNodeArguments.js        # ノード引数管理
-          usePipelineFlow.js         # パイプローフロー状態管理
-       utils/              # ユーティリティ
-           codeGenerator.js           # KFP コード生成
-           lspClient.js               # LSP サーバー通信
-    build/                  # ビルド出力（Nginx でサーブ）
+       components/             # UI コンポーネント
+          ArgRow.jsx
+          ArgumentsSection.jsx
+          CodeEditorDialog.jsx
+          FlowArea.jsx
+          GeneratedCodeDialog.jsx
+          NodeHeader.jsx
+          OutputParamsEditor.jsx
+          PipelineParamsEditor.jsx
+          SidebarPanel.jsx
+       hooks/                  # React Hooks
+          useNodeArguments.js
+          usePipelineFlow.js
+       utils/                  # ユーティリティ
+           codeGenerator.js
+           lspClient.js
+    build/                      # ビルド出力（Nginx でサーブ）
 
- backend/                    # Python LSP サーバー
-     Dockerfile              # Python 3.11-slim
-     requirements.txt        # Python 依存パッケージ
-     lsp_wrapper.py          # Flask LSP サーバー実装 (214 行)
+ backend/                        # Python バックエンド
+     Dockerfile                  # LSP サーバー (Python 3.11-slim)
+     Dockerfile.compiler         # KFP Compiler (Python 3.11-slim)
+     requirements.txt
+     lsp_wrapper.py              # Flask LSP サーバー実装
+     app.py                      # Flask KFP Compiler API（オプション）
+```
+
+**docker-compose.override.yml の役割**:
+
+開発モード時に自動的に以下の設定が追加されます：
+```yaml
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev          # 本番 Dockerfile.dev 使用
+    ports:
+      - "3001:3000"                       # ポート 3001 にマップ
+    volumes:
+      - ./frontend/src:/app/src           # ソース変更リアルタイム反映
+      - ./frontend/public:/app/public
+    environment:
+      - WATCHPACK_POLLING=true            # ファイル変更監視
+      - CHOKIDAR_USEPOLLING=true          # React Dev Server ホットリロード
+      - WDS_SOCKET_PORT=3000
+    stdin_open: true
+    tty: true
 ```
 
 ## アーキテクチャ
@@ -283,7 +351,37 @@ def MyPipeline(init_path: str = 's3://directory', image_pattern: str = '*.png', 
 
 **ダウンロード機能**: 「DOWNLOAD PYTHON」ボタンでコードを .py ファイルとして保存可能
 
-## 開発
+## 開発ガイド
+
+### Docker での開発（推奨）
+
+```bash
+# 開発環境で起動（ホットリロード有効）
+docker-compose up
+
+# または新しくビルド
+docker-compose up --build
+
+# バックグラウンド起動
+docker-compose up -d
+
+# ログ確認
+docker-compose logs -f frontend         # フロントログ（ホットリロード表示）
+docker-compose logs -f language-server  # LSP サーバーログ
+
+# 停止
+docker-compose down
+
+# コンテナの強制削除（リセット）
+docker-compose down -v
+```
+
+**ホットリロード動作確認**:
+
+1. ブラウザで http://localhost:3001 開く
+2. `frontend/src/App.js` の任意の箇所を編集（例: タイトル変更）
+3. ファイル保存 (Ctrl+S)
+4. ブラウザが自動更新される ✅
 
 ### ローカル開発（Docker なし）
 
@@ -291,35 +389,50 @@ def MyPipeline(init_path: str = 's3://directory', image_pattern: str = '*.png', 
 # フロント単体開発
 cd frontend
 npm install
-npm start  # ローカル 3000 (dev サーバー)
+npm start  # ローカル http://localhost:3000
 
-# バック単体開発
+# 別ターミナルでバック起動
 cd backend
 pip install -r requirements.txt
-python lsp_wrapper.py  # ローカル 8000
+python lsp_wrapper.py  # http://localhost:8000
 ```
 
-### Docker でのビルド起動
+**ローカル開発のメリット**:
+- 🚀 高速起動（Docker オーバーヘッドなし）
+- 🔍 デバッグ簡単
+- 🔧 パッケージ追加時の反映が高速
+
+### Docker コンテナ管理
 
 ```bash
-# イメージのビルド
-docker-compose build
+# イメージのビルド（キャッシュクリア）
+docker-compose build --no-cache
 
-# コンテナ起動（フォアグラウンド）
-docker-compose up
+# 特定のサービスのみビルド
+docker-compose build frontend
 
-# コンテナ起動（バックグラウンド）
-docker-compose up -d
-
-# ログ確認
-docker-compose logs -f language-server  # バックログ
-docker-compose logs -f frontend         # フロントログ
-
-# サービス再起動
+# 各サービスの再起動
 docker-compose restart language-server
+docker-compose restart frontend
 
-# 停止削除
-docker-compose down
+# ボリュームマウント確認
+docker inspect kubeflow-pipeline-builder-frontend-1 | grep -A 5 "Mounts"
+
+# 環境変数確認
+docker-compose config | grep -A 10 "frontend:"
+```
+
+### 本番環境でのビルド・起動
+
+```bash
+# 本番設定のみで起動（docker-compose.override.yml を無視）
+docker-compose -f docker-compose.yml up
+
+# または環境変数で明示的に指定
+COMPOSE_FILE=docker-compose.yml docker-compose up
+
+# ビルド済みイメージで起動（高速）
+docker-compose -f docker-compose.yml up --no-build
 ```
 
 ## 機能詳細
@@ -362,30 +475,154 @@ docker-compose down
 
 ## トラブルシューティング
 
-### Docker エラー: ポート 3000/8000 が既に使用中
+### ポート競合エラー
 
 ```bash
 # 既存コンテナを停止
 docker-compose down
 
-# ポート確認
-netstat -ano | findstr :3000
+# ポート確認（Windows PowerShell）
+netstat -ano | findstr :3001
 
-# コンテナ削除
+# または（Linux/macOS）
+lsof -i :3001
+
+# 強制削除が必要な場合
 docker rm <container-id>
+docker ps -a | grep kubeflow
+
+# システムリセット（全て削除）
+docker system prune -f --volumes
+```
+
+### ホットリロードが機能しない
+
+```bash
+# 1. docker-compose.override.yml が読み込まれているか確認
+docker-compose config | grep -A 20 "frontend:"
+
+# 出力例（正常）:
+#   frontend:
+#     build:
+#       context: ./frontend
+#       dockerfile: Dockerfile.dev  ← これが重要
+#     ports:
+#       - "3001:3000"  ← ポート 3001 であることを確認
+#     volumes:
+#       - ./frontend/src:/app/src  ← ボリュームマウント確認
+#     environment:
+#       - WATCHPACK_POLLING=true
+#       - CHOKIDAR_USEPOLLING=true
+
+# 2. ボリュームマウントが機能しているか確認
+docker inspect kubeflow-pipeline-builder-frontend-1 | grep -A 10 "Mounts"
+
+# 出力例（正常）:
+#   "Mounts": [
+#     {
+#       "Type": "bind",
+#       "Source": "C:\\Users\\...\\frontend\\src",  
+#       "Destination": "/app/src",
+#       "Mode": ""
+#     }
+#   ]
+
+# 3. React Dev Server が起動しているか確認
+docker-compose logs frontend | grep "webpack compiled"
+
+# 4. 環境変数が設定されているか確認
+docker exec kubeflow-pipeline-builder-frontend-1 env | grep -i polling
+
+# 5. Dockerfile.dev が正しく参照されているか確認
+docker inspect kubeflow-pipeline-builder-frontend-1 | grep -i "dockerfile"
+```
+
+**ホットリロード失敗の原因と対策**:
+
+| 症状 | 原因 | 対策 |
+|---|---|---|
+| ブラウザ更新されない | `Dockerfile.dev` 未適用 | `docker-compose config` で確認 |
+| "Cannot find module src" | ボリュームマウント未実装 | Docker 再起動 |
+| npm start が走らない | `CMD` が Dockerfile.dev で設定されていない | `Dockerfile.dev` の CMD 確認 |
+| ポート 3001 接続不可 | docker-compose.override.yml 読み込まれていない | ファイル名確認、キャッシュクリア |
+
+**解決策**:
+
+```bash
+# キャッシュをクリアして再ビルド
+docker-compose down -v
+docker system prune -f --volumes
+docker-compose build --no-cache frontend
+docker-compose up
 ```
 
 ### LSP サーバーが応答しない
 
 ```bash
-# ヘルスチェック
+# 1. サーバーの状態確認
 curl http://localhost:8000/health
 
-# ログで詳細確認
+# 正常応答: {"status": "ok"}
+
+# 2. ログで詳細確認
 docker-compose logs language-server
 
-# サーバー再起動
+# 3. コンテナが起動しているか確認
+docker-compose ps
+
+# 4. サーバー再起動
 docker-compose restart language-server
+
+# 5. ネットワーク疎通確認
+docker-compose exec frontend curl http://language-server:8000/health
+```
+
+### フロントエンドコンパイルエラー
+
+```bash
+# 1. npm キャッシュクリア
+rm -rf frontend/node_modules
+rm frontend/package-lock.json
+
+# 2. 再ビルド
+docker-compose build --no-cache frontend
+
+# 3. 起動
+docker-compose up
+```
+
+### PC 再起動後の問題
+
+```bash
+# 1. Docker デーモンが起動しているか確認
+docker ps
+
+# 出力なし → Docker Desktop/Daemon を起動
+
+# 2. ポート TIME_WAIT 状態の場合
+docker-compose down -v
+# 2-3 分待機
+docker-compose up
+
+# 3. 全リセット
+docker system prune -f --volumes --all
+docker-compose up --build
+```
+
+### ファイル保存しても反映されない
+
+```bash
+# 1. ボリュームマウント確認
+docker inspect kubeflow-pipeline-builder-frontend-1 | grep Mounts
+
+# 2. ファイル権限確認（Linux/macOS）
+ls -la frontend/src/
+
+# 3. Docker Desktop のファイル共有設定確認
+#    Settings → Resources → File Sharing に対象フォルダが含まれているか確認（Mac/Windows）
+
+# 4. npm watch 動作確認
+docker-compose logs frontend | grep "webpack"
 ```
 
 ## パフォーマンス
