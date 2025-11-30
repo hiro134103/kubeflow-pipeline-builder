@@ -157,6 +157,30 @@ kubeflow-pipeline-builder/
    - 正規表現: `r'(kfp(?:\.[a-zA-Z_]\w*)*)\s*\.\s*(\w*)$'`
    - モジュールパスをマッチング、静的リストから補完
 
+**補完対象ライブラリを増やす方法**:
+
+Jedi が自動的に解析するライブラリを増やすには、`backend/requirements.txt` に追加してください。
+
+```bash
+# 例: TensorFlow を追加
+echo "tensorflow==2.13.0" >> backend/requirements.txt
+
+# または PyTorch
+echo "torch==2.0.0" >> backend/requirements.txt
+```
+
+Docker を再ビルドすると、インストールされたライブラリは自動的に Jedi による補完の対象になります：
+
+```bash
+docker-compose build language-server
+docker-compose up
+```
+
+**現在対応しているライブラリ**:
+- numpy, pandas, pathlib (Python 標準)
+- scikit-learn
+- KFP 2.0 (フォールバック)
+
 **エンドポイント**:
 
 | エンドポイント | メソッド | 説明 |
