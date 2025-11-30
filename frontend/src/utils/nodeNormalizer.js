@@ -44,8 +44,11 @@ export const normalizeComponentDefinition = (componentDef) => {
     // 引数（args形式のみサポート）
     args: normalizeArguments(componentDef.args),
     
+    // 出力パラメータ
+    outputs: componentDef.outputs || [],
+    
     // その他のメタデータ
-    returnType: componentDef.returnType || 'Any',
+    returnType: componentDef.returnType || 'str',
     description: componentDef.description || '',
     
     // 位置情報（オプション）

@@ -253,6 +253,7 @@ export function usePipelineFlow(pipelineParams) {
           args: normalized.args,
           returnType: normalized.returnType,
           codeString: normalized.codeString,
+          outputs: normalized.outputs || [],
           
           // availableSourcesは後で更新される（useMemoによる）
           availableSources: buildSources(nds, pipelineParams),
@@ -261,6 +262,8 @@ export function usePipelineFlow(pipelineParams) {
           // ✅ コールバックを最初から設定
           onArgChange: callbacks.onArgChange,
           onOutputTypeChange: callbacks.onOutputTypeChange,
+          onOutputChange: callbacks.onOutputChange,
+          onBaseImageChange: callbacks.onBaseImageChange,
           onDelete: callbacks.onDelete,
           onRename: callbacks.onRename,
           onOpenCode: callbacks.onOpenCode,
