@@ -52,6 +52,86 @@ docker-compose up --build
 - **LSP サーバー**: http://localhost:8000/health
 - **KFP Compiler**: http://localhost:5000/health
 
+## クイックチュートリアル
+
+**5分でパイプライン コード生成まで**
+
+### 1. パイプライン パラメータ設定
+
+左パネルの「+ Add Parameter」：
+- キー: `input_path`
+- 型: `str`
+- デフォルト値: `s3://data/input.csv`
+
+### 2. ノード追加
+
+左パネルの「Blank Component」をクリック → キャンバスに配置  
+（2個のノードを追加）
+
+### 3. ノード編集
+
+ノード → 右パネルで設定：
+- **関数名**: `load_data` → `train_model`
+- **引数**: 各ノードで `+ Add Argument`
+  - `load_data`: パイプラインパラメータ `input_path` を選択（型: str）
+  - `train_model`: `load_data` の出力を選択（型: Dataset）
+- **戻り値**: `Output[Dataset]`
+
+### 3.5. Python コード編集（Monaco Editor）
+
+ノードヘッダーのコードアイコン（</> ボタン）をクリック → Monaco Editor を開く
+
+**コード補完機能**:
+- `np.` と入力 → numpy メソッドが補完
+- `pd.` と入力 → pandas メソッドが補完
+- `@component` 入力 → KFP デコレータ補完
+- `Ctrl+Space` で手動補完トリガー
+
+```python
+# load_data の例
+def load_data(path: str) -> Dataset:
+    import pandas as pd
+    df = pd.read_csv(path)  # pd. で補完
+    return df
+
+# train_model の例  
+def train_model(data: str) -> str:
+    # 訓練ロジック
+    return "model.pkl"
+```
+
+エディタ右下の「Save」で保存
+
+### 4. ノード接続
+
+`load_data` の出力 → `train_model` の入力にドラッグして接続
+
+### 5. 自動コード生成
+
+右下の「GENERATE PYTHON」をクリック
+
+生成コード（例）:
+```python
+@component()
+def load_data(path: str) -> Dataset:
+    import pandas as pd
+    df = pd.read_csv(path)
+    return df
+
+@component()
+def train_model(data: str) -> str:
+    return "model.pkl"
+
+@pipeline(name='MyPipeline')
+def MyPipeline(input_path: str = 's3://data/input.csv'):
+    step0 = load_data(input_path)
+    step1 = train_model(step0.output)
+```
+
+**ダウンロード**: 「DOWNLOAD PYTHON」で `.py` ファイル保存 ✅
+
+---
+
 ## プロジェクト構成
 
 ```
