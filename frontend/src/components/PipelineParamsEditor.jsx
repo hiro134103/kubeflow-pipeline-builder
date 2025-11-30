@@ -22,6 +22,7 @@ const ParamRow = React.memo(({ param, index, onUpdate, onRemove }) => {
   }, [index, param.key, param.type, onUpdate]);
 
   const handleTypeChange = React.useCallback((e) => {
+
     onUpdate(index, param.key, param.value, e.target.value);
   }, [index, param.key, param.value, onUpdate]);
 

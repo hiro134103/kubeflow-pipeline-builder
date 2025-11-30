@@ -46,6 +46,55 @@ const formatLiteralByType = (value, type) => {
 };
 
 /**
+ * トポロジカルソート: DAGのエッジから依存関係に基づいてノードをソート
+ * @param {Array} nodes - ノード配列
+ * @param {Array} edges - エッジ配列
+ * @returns {Array} ソート済みノード配列
+ */
+const topologicalSort = (nodes, edges) => {
+  // 入次数を計算
+  const inDegree = {};
+  const adjList = {};
+  
+  nodes.forEach(n => {
+    inDegree[n.id] = 0;
+    adjList[n.id] = [];
+  });
+  
+  edges.forEach(e => {
+    if (e.source && e.target) {
+      adjList[e.source] = adjList[e.source] || [];
+      adjList[e.source].push(e.target);
+      inDegree[e.target] = (inDegree[e.target] || 0) + 1;
+    }
+  });
+  
+  // 入次数0のノードをキューに追加
+  const queue = nodes.filter(n => inDegree[n.id] === 0);
+  const sorted = [];
+  
+  while (queue.length > 0) {
+    const node = queue.shift();
+    sorted.push(node);
+    
+    (adjList[node.id] || []).forEach(targetId => {
+      inDegree[targetId]--;
+      if (inDegree[targetId] === 0) {
+        const targetNode = nodes.find(n => n.id === targetId);
+        if (targetNode) queue.push(targetNode);
+      }
+    });
+  }
+  
+  // サイクルがある場合は元の順序を返す
+  if (sorted.length !== nodes.length) {
+    return nodes;
+  }
+  
+  return sorted;
+};
+
+/**
  * ReactFlowのノードとエッジ構造からKFPパイプラインコードを生成する
  * 
  * @param {Array<Object>} nodes - ReactFlowノードの配列
@@ -58,12 +107,15 @@ const formatLiteralByType = (value, type) => {
 export function generatePipelineCode(nodes, edges, pipelineParams, pipelineName, componentDefinitions) {
   if (!nodes.length) return '';
 
+  // ✅ ノードをトポロジカルソートして依存関係の順序に並べる
+  const sortedNodes = topologicalSort(nodes, edges);
+
   // 1. ノードIDと関数名のマッピングを構築
   // Use the node label (sanitized) so component names are reflected in the generated code
   const nodeFunctionMap = {};
   const nameCount = {}; // 重複名の追跡
   
-  nodes.forEach((node) => {
+  sortedNodes.forEach((node) => {
     const baseName = sanitizeName(node.data.label || node.data.componentType || 'component');
     
     // 重複をチェック - 同じ名前が複数ある場合のみ番号を付与
@@ -75,7 +127,7 @@ export function generatePipelineCode(nodes, edges, pipelineParams, pipelineName,
 
   // 2回目のループで、重複がある場合のみ番号を付与
   const usedNames = new Set();
-  nodes.forEach((node) => {
+  sortedNodes.forEach((node) => {
     const baseName = sanitizeName(node.data.label || node.data.componentType || 'component');
     
     if (nameCount[baseName] > 1) {
@@ -92,43 +144,66 @@ export function generatePipelineCode(nodes, edges, pipelineParams, pipelineName,
   });
 
   // 2. コンポーネント関数定義の生成 (Python)
-  const componentFunctions = nodes.map((node) => {
+  const componentFunctions = sortedNodes.map((node) => {
     const funcName = nodeFunctionMap[node.id];
     const argsArray = node.data.args || [];
+    const outputsArray = node.data.outputs || [];
     const baseImage = node.data.baseImage || 'python:3.11-slim';
 
     // 入力引数の生成
     const paramNames = argsArray.map((a) => sanitizeName(a.name || `arg_${a.id}`));
-    const paramList = paramNames.map((nm, i) => {
+    const inputParamList = paramNames.map((nm, i) => {
       const declaredType = pythonTypeFor(argsArray[i]?.type || 'str');
       return `${nm}: ${declaredType}`;
     }).join(', ');
 
-    // 出力パラメータの生成 (Output[Dataset] 型)
-    const outputs = node.data.outputs || [];
-    const outputList = outputs.map((out) => {
-      const outName = sanitizeName(out.name || `output_${out.id}`);
-      const outType = pythonTypeFor(out.type || 'Output[Dataset]');
-      return `${outName}: ${outType}`;
+    // 出力パラメータの生成
+    const outputParamNames = outputsArray.map((o) => sanitizeName(o.name || `output_${o.id}`));
+    const outputParamList = outputParamNames.map((nm, i) => {
+      const declaredType = pythonTypeFor(outputsArray[i]?.type || 'Dataset');
+      return `${nm}: ${declaredType}`;
     }).join(', ');
 
-    // 完全な引数リスト (入力 + 出力)
-    const fullParamList = [paramList, outputList].filter(Boolean).join(', ');
+    // 入力と出力を結合
+    const allParams = [inputParamList, outputParamList].filter(Boolean).join(', ');
 
     // ノードのコードソース
-    const rawSource = node.data.codeString?.trim() || '';
+    let rawSource = node.data.codeString?.trim() || '';
+
+    // ユーザーがコードを入力していない場合、デフォルトコードを生成
+    if (!rawSource) {
+      const bodyLines = [];
+      
+      // 出力パラメータにデータを書き込むデフォルトコードを生成
+      if (outputParamNames.length > 0) {
+        outputParamNames.forEach(outputName => {
+          bodyLines.push(`    # Write output for '${outputName}'`);
+          bodyLines.push(`    with open(${outputName}.path, 'w') as f:`);
+          bodyLines.push(`        f.write("output data")`);
+        });
+      }
+      
+      // コードがない場合のデフォルト
+      if (bodyLines.length === 0) {
+        bodyLines.push(`    print("${funcName} component")`);
+      }
+      
+      rawSource = bodyLines.join('\n');
+    }
 
     // Pythonの関数定義の構造を作成
     if (/\bdef\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:/.test(rawSource)) {
       // 既存の関数定義がある場合、シグネチャを置き換え
+      const funcDefRegex = /(^|\n)(\s*)def\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:/;
+      const indent = rawSource.match(funcDefRegex)?.[2] || '';
       return rawSource.replace(
-        /(^|\n)\s*def\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:/,
-        `$1@component(base_image='${baseImage}')\ndef ${funcName}(${fullParamList}):`
+        funcDefRegex,
+        `$1${indent}@component(base_image='${baseImage}')\n${indent}def ${funcName}(${allParams || ''}):`
       );
     } else {
       // 生のコードをインデントして関数内に挿入
       const indented = rawSource.split('\n').map(line => '    ' + line).join('\n');
-      return `@component(base_image='${baseImage}')\ndef ${funcName}(${fullParamList}):\n${indented || '    pass'}`;
+      return `@component(base_image='${baseImage}')\ndef ${funcName}(${allParams || ''}):\n${indented || '    pass'}`;
     }
   }).join('\n\n');
 
@@ -147,47 +222,51 @@ export function generatePipelineCode(nodes, edges, pipelineParams, pipelineName,
 
   // 4. パイプラインステップと依存関係の生成
   const nodeStepName = {};
-  nodes.forEach((n, i) => { 
+  sortedNodes.forEach((n, i) => { 
     nodeStepName[n.id] = `step${i}`; 
   });
 
-  const pipelineSteps = nodes.map((node) => {
+  const pipelineSteps = sortedNodes.map((node) => {
     const funcName = nodeFunctionMap[node.id];
     const stepVar = nodeStepName[node.id];
     const argsArray = node.data.args || [];
 
-    // ステップ呼び出しの引数リストを生成
-    const argList = argsArray.map((a) => {
-      if (!a || typeof a !== 'object') return 'None';
+    // ステップ呼び出しの引数リストを生成 (キーワード引数)
+    const argPairs = argsArray.map((a) => {
+      if (!a || typeof a !== 'object') return null;
+      
+      const argName = sanitizeName(a.name || `arg_${a.id}`);
+      let argValue;
 
       if (a.mode === 'literal') {
         const declaredType = a.type || 'str';
-        return formatLiteralByType(a.value, declaredType);
-      }
-      
-      if (a.mode === 'pipeline') {
+        argValue = formatLiteralByType(a.value, declaredType);
+      } else if (a.mode === 'pipeline') {
         // パイプライン関数の引数名を参照
-        return sanitizeName(a.key || 'None') || 'None';
-      }
-      
-      if (a.mode === 'node') {
+        argValue = sanitizeName(a.key || 'None') || 'None';
+      } else if (a.mode === 'node') {
         // 上流のステップ変数を参照
         const refStep = nodeStepName[a.nodeId];
-        if (!refStep) return 'None';
+        if (!refStep) return null;
         
         // 出力が指定されている場合は .outputs['name'] 構文を使用
         if (a.outputName) {
-          return `${refStep}.outputs['${sanitizeName(a.outputName)}']`;
+          argValue = `${refStep}.outputs['${sanitizeName(a.outputName)}']`;
+        } else {
+          // 出力が指定されていない場合は .output を使用（後方互換性）
+          argValue = `${refStep}.output`;
         }
-        
-        // 出力が指定されていない場合は .output を使用（後方互換性）
-        return `${refStep}.output`;
+      } else {
+        return null;
       }
       
-      return 'None';
-    }).join(', ');
+      return `${argName}=${argValue}`;
+    }).filter(Boolean);
 
-    return `    ${stepVar} = ${funcName}(${argList})`;
+    // 引数がない場合は空の括弧
+    const argStr = argPairs.length > 0 ? argPairs.join(', ') : '';
+
+    return `    ${stepVar} = ${funcName}(${argStr})`;
   }).join('\n');
 
   const dependencyLines = (edges || []).map((e) => {

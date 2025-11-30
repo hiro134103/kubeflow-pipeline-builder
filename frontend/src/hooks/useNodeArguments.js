@@ -1,5 +1,4 @@
 import React from 'react';
-import { validateArguments } from '../utils/nodeNormalizer';
 
 /**
  * ✅ useNodeArguments - args形式のみをサポート
@@ -20,11 +19,11 @@ export const useNodeArguments = (nodeId, data, onArgChange, onOutputChange) => {
   // ✅ 開発環境でのバリデーション
   React.useEffect(() => {
     if (process.env.NODE_ENV === 'development' && args.length > 0) {
-      const validation = validateArguments(args);
-      if (!validation.valid) {
-        console.error(
-          `[useNodeArguments] Node ${nodeId} has invalid arguments:`,
-          validation.errors
+      // 引数の必須フィールドのみを検証（modeが'node'でもnodeIdが空の場合は警告しない）
+      const hasValidId = args.every(arg => arg.id);
+      if (!hasValidId) {
+        console.warn(
+          `[useNodeArguments] Node ${nodeId} has arguments without id`
         );
       }
     }
@@ -41,14 +40,25 @@ export const useNodeArguments = (nodeId, data, onArgChange, onOutputChange) => {
   const onOutputsUpdate = React.useCallback((newOutputs) => {
     if (onOutputChange) {
       onOutputChange(nodeId, newOutputs);
+    } else {
+      console.error('[useNodeArguments] onOutputChange is not defined!');
     }
   }, [nodeId, onOutputChange]);
 
   // ✅ 引数の追加
   const addArg = React.useCallback(() => {
+    // デフォルト名を生成：arg1, arg2, arg3...
+    const existingNames = args.map(a => a.name).filter(Boolean);
+    let defaultName = '';
+    let counter = 1;
+    while (!defaultName || existingNames.includes(defaultName)) {
+      defaultName = `arg${counter}`;
+      counter++;
+    }
+    
     const newArg = {
       id: `arg_${Date.now()}`,
-      name: '',
+      name: defaultName,
       mode: 'literal',
       value: '',
       key: '',
@@ -97,9 +107,9 @@ export const useNodeArguments = (nodeId, data, onArgChange, onOutputChange) => {
     const copy = [...args];
     copy[index] = { ...copy[index], ...patch };
     
-    // ✅ mode変更時のクリーンアップ
+    // ✅ mode変更時のクリーンアップ（typeは保護）
     if (patch.mode) {
-      // mode変更時は関係ないフィールドをクリア
+      // mode変更時は関係ないフィールドをクリア（typeはそのまま）
       if (patch.mode === 'literal') {
         copy[index].key = '';
         copy[index].nodeId = '';
@@ -114,6 +124,7 @@ export const useNodeArguments = (nodeId, data, onArgChange, onOutputChange) => {
       }
     }
     
+
     onArgsUpdate(copy);
   }, [args, onArgsUpdate]);
 

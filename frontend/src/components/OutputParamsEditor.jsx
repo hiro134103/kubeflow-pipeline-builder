@@ -29,6 +29,8 @@ const OutputRow = React.memo(({ output, index, onUpdate, onRemove }) => {
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
       {/* Output Name Input */}
       <input
+        id={`output-name-${index}`}
+        name={`output-name-${index}`}
         type="text"
         placeholder="Output Name"
         value={output.name || ''}
@@ -44,6 +46,8 @@ const OutputRow = React.memo(({ output, index, onUpdate, onRemove }) => {
       
       {/* Type Select */}
       <select
+        id={`output-type-${index}`}
+        name={`output-type-${index}`}
         value={output.type || 'Output[Dataset]'}
         onChange={handleTypeChange}
         style={{ 

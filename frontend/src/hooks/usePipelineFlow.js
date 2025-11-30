@@ -8,16 +8,41 @@ import { normalizeComponentDefinition } from '../utils/nodeNormalizer';
  * 改善点:
  * - ノードIDとラベルのみを抽出（軽量化）
  * - 不要なデータをループしない
+ * - 各ノードの出力パラメータ情報を含める
+ * - パイプラインパラメータの型情報を含める
  */
 const buildSources = (nodesList, pipelineParamsList) => {
   const pipelineOpts = (pipelineParamsList || [])
     .filter(p => p.key)
-    .map(p => ({ value: `pipeline:${p.key}`, label: `Pipeline: ${p.key}` }));
+    .map(p => ({ 
+      value: `pipeline:${p.key}`, 
+      label: `Pipeline: ${p.key}`,
+      paramKey: p.key,
+      paramType: p.type || 'str',
+    }));
   
   const nodeOpts = (nodesList || [])
-    .map(n => ({ value: `node:${n.id}`, label: `Node: ${n.data?.label || n.id}` }));
+    .map(n => ({ 
+      value: `node:${n.id}`, 
+      label: `Node: ${n.data?.label || n.id}`,
+      nodeId: n.id,
+      nodeName: n.data?.label || n.id,
+    }));
   
-  return [...pipelineOpts, ...nodeOpts];
+  // ノード毎に、その出力パラメータを含める拡張オプション
+  const nodeOutputOpts = (nodesList || [])
+    .flatMap(n => {
+      const outputs = n.data?.outputs || [];
+      return outputs.map(output => ({
+        value: `node:${n.id}:${output.name}`,
+        label: `${n.data?.label || n.id}.${output.name} (${output.type})`,
+        nodeId: n.id,
+        outputName: output.name,
+        outputType: output.type,
+      }));
+    });
+  
+  return [...pipelineOpts, ...nodeOpts, ...nodeOutputOpts];
 };
 
 /**
@@ -138,8 +163,24 @@ export function usePipelineFlow(pipelineParams) {
         }
       }
 
-      // Node参照: 上流ノードの戻り値型を取得
-      if (copy.mode === 'node' && copy.nodeId) {
+      // Node参照: 上流ノードの出力パラメータの型を取得
+      if (copy.mode === 'node' && copy.nodeId && copy.outputName) {
+        const upstream = nds.find(n => n.id === copy.nodeId);
+        if (upstream?.data?.outputs) {
+          const output = upstream.data.outputs.find(o => o.name === copy.outputName);
+          if (output?.type) {
+            // Output[Dataset] の場合は Input[Dataset] にする
+            const expectedType = output.type === 'Output[Dataset]' 
+              ? 'Input[Dataset]' 
+              : output.type;
+            if (copy.type !== expectedType) {
+              copy.type = expectedType;
+              needsUpdate = true;
+            }
+          }
+        }
+      } else if (copy.mode === 'node' && copy.nodeId && !copy.outputName) {
+        // outputName がない場合は、戻り値型を取得（後方互換性）
         const upstream = nds.find(n => n.id === copy.nodeId);
         if (upstream?.data?.returnType && copy.type !== upstream.data.returnType) {
           copy.type = upstream.data.returnType;
@@ -219,14 +260,21 @@ export function usePipelineFlow(pipelineParams) {
    * ノードのラベル変更
    */
   const renameNode = useCallback((nodeId, newLabel) => {
-    setNodes((nds) => 
-      nds.map(n => 
+    setNodes((nds) => {
+      const updated = nds.map(n => 
         n.id === nodeId 
           ? { ...n, data: { ...n.data, label: newLabel } }
           : n
-      )
-    );
-  }, [setNodes]);
+      );
+      
+      // ✅ ノード名が変更されたので、全ノードの availableSources を再計算
+      const newSources = buildSources(updated, pipelineParams);
+      return updated.map(n => ({
+        ...n,
+        data: { ...n.data, availableSources: newSources }
+      }));
+    });
+  }, [setNodes, pipelineParams]);
 
   /**
    * ✅ ノード追加
@@ -243,6 +291,7 @@ export function usePipelineFlow(pipelineParams) {
     const callbacks = componentDef.callbacks || {};
 
     setNodes((nds) => {
+      // 新規ノードを作成
       const newNode = {
         id,
         type: 'custom',
@@ -255,8 +304,8 @@ export function usePipelineFlow(pipelineParams) {
           codeString: normalized.codeString,
           outputs: normalized.outputs || [],
           
-          // availableSourcesは後で更新される（useMemoによる）
-          availableSources: buildSources(nds, pipelineParams),
+          // 新規ノードを含めた状態で availableSources を計算
+          availableSources: buildSources([...nds, { id, data: { label: normalized.label, outputs: normalized.outputs || [] } }], pipelineParams),
           pipelineParams,
           
           // ✅ コールバックを最初から設定
@@ -270,13 +319,23 @@ export function usePipelineFlow(pipelineParams) {
         },
       };
 
-      return [...nds, newNode];
+      // 全ノードのリスト（既存 + 新規）
+      const allNodes = [...nds, newNode];
+
+      // 既存ノードの availableSources も更新（全ノードを反映）
+      const updatedNds = nds.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          availableSources: buildSources(allNodes, pipelineParams)
+        }
+      }));
+
+      return [...updatedNds, newNode];
     });
+  }, [pipelineParams]);
 
-    return id;
-  }, [pipelineParams, setNodes]);
-
-  // ----------------- availableSourcesの同期 -----------------
+  // ------------------- availableSourcesの同期 -----------------
 
   /**
    * ✅ パフォーマンス改善: availableSourcesの更新を最適化
