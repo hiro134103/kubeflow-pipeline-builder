@@ -13,6 +13,7 @@ import NodeHeader from './components/NodeHeader';
 import ArgumentsSection from './components/ArgumentsSection';
 import OutputTypeSelector from './components/OutputTypeSelector';
 import BaseImageSelector from './components/BaseImageSelector';
+import OutputParamsEditor from './components/OutputParamsEditor';
 import CodeEditorDialog from './components/CodeEditorDialog';
 import GeneratedCodeDialog from './components/GeneratedCodeDialog';
 import SidebarPanel from './components/SidebarPanel';
@@ -24,10 +25,11 @@ const CustomNode = React.memo(({ data, id }) => {
   const available = data.availableSources || [];
   const pipelineParamsList = (data.pipelineParams || []).filter(p => p.key);
 
-  const { args, addArg, removeArg, moveArg, updateArg } = useNodeArguments(
+  const { args, outputs, addArg, removeArg, moveArg, updateArg, addOutput, removeOutput, updateOutput } = useNodeArguments(
     id,
     data,
-    data.onArgChange
+    data.onArgChange,
+    data.onOutputChange
   );
 
   return (
@@ -67,6 +69,14 @@ const CustomNode = React.memo(({ data, id }) => {
           onMoveArg={moveArg}
         />
 
+        {/* Output Parameters */}
+        <OutputParamsEditor
+          outputs={outputs}
+          onAddOutput={addOutput}
+          onUpdateOutput={updateOutput}
+          onRemoveOutput={removeOutput}
+        />
+
         {/* Output */}
         <OutputTypeSelector
           returnType={data.returnType}
@@ -85,6 +95,7 @@ const CustomNode = React.memo(({ data, id }) => {
     prevProps.data.returnType === nextProps.data.returnType &&
     prevProps.data.baseImage === nextProps.data.baseImage &&
     prevProps.data.args === nextProps.data.args &&
+    prevProps.data.outputs === nextProps.data.outputs &&
     prevProps.data.availableSources?.length === nextProps.data.availableSources?.length &&
     prevProps.data.pipelineParams?.length === nextProps.data.pipelineParams?.length
   );
@@ -129,6 +140,7 @@ function App() {
     renameNode,
     onArgChange,
     onOutputTypeChange,
+    onOutputChange,
     onBaseImageChange,
     updateNodeData,
     injectCallbacksToNode,
@@ -171,6 +183,7 @@ function App() {
       callbacks: {
         onArgChange,
         onOutputTypeChange,
+        onOutputChange,
         onBaseImageChange,
         onOpenCode: openCodeEditor,
         onRename: handleRename,
@@ -179,7 +192,7 @@ function App() {
     };
     
     addNode(defWithPosition);
-  }, [addNode, onArgChange, onOutputTypeChange, onBaseImageChange, openCodeEditor, handleRename, handleDelete]);
+  }, [addNode, onArgChange, onOutputTypeChange, onOutputChange, onBaseImageChange, openCodeEditor, handleRename, handleDelete]);
 
   const handleAddPipelineParam = useCallback(() => {
     setPipelineParams((prev) => [

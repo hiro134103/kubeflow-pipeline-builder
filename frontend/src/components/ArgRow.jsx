@@ -35,6 +35,7 @@ const ArgRow = React.memo(
           value: '',
           key: '',
           nodeId: '',
+          outputName: '',
         });
       },
       [index, onUpdate]
@@ -57,6 +58,13 @@ const ArgRow = React.memo(
     const handleNodeIdChange = React.useCallback(
       (e) => {
         onUpdate(index, { nodeId: e.target.value });
+      },
+      [index, onUpdate]
+    );
+
+    const handleOutputNameChange = React.useCallback(
+      (e) => {
+        onUpdate(index, { outputName: e.target.value });
       },
       [index, onUpdate]
     );
@@ -177,26 +185,46 @@ const ArgRow = React.memo(
 
           {/* Node Output */}
           {arg.mode === 'node' && (
-            <select
-              value={arg.nodeId || ''}
-              onChange={handleNodeIdChange}
-              style={{
-                flex: 1,
-                padding: 3,
-                fontSize: 11,
-                borderRadius: 4,
-                border: '1px solid #d1d5db',
-              }}
-            >
-              <option value="">-- node --</option>
-              {available
-                .filter((a) => a.value.startsWith('node:'))
-                .map((opt) => (
-                  <option key={opt.value} value={opt.value.split(':')[1]}>
-                    {opt.label}
-                  </option>
-                ))}
-            </select>
+            <>
+              <select
+                value={arg.nodeId || ''}
+                onChange={handleNodeIdChange}
+                style={{
+                  flex: 1,
+                  padding: 3,
+                  fontSize: 11,
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                }}
+              >
+                <option value="">-- node --</option>
+                {available
+                  .filter((a) => a.value.startsWith('node:'))
+                  .map((opt) => (
+                    <option key={opt.value} value={opt.value.split(':')[1]}>
+                      {opt.label}
+                    </option>
+                  ))}
+              </select>
+              
+              {/* Output Parameter Name (if node outputs data) */}
+              {arg.nodeId && (
+                <input
+                  type="text"
+                  placeholder="output name"
+                  value={arg.outputName || ''}
+                  onChange={handleOutputNameChange}
+                  style={{
+                    width: 100,
+                    padding: 3,
+                    fontSize: 11,
+                    borderRadius: 4,
+                    border: '1px solid #d1d5db',
+                  }}
+                  title="Leave empty to use .output, or specify output parameter name"
+                />
+              )}
+            </>
           )}
         </Box>
       </Box>
